@@ -87,6 +87,29 @@ def metric_disp(pred, gt):
 
     return [epe, d1 * 100]
 
+
+
+def metric_depth_vtd(pred_disp,
+                     gt,
+                     median_scale=False,
+                     focal=1634.5,
+                     baseline=0.5,
+                     min_disp=0.01,
+                     min_depth=1e-3,
+                     max_depth=100):
+    _, _, h, w = gt.shape
+    pred_disp = torch.nn.functional.interpolate(pred_disp,
+                                                [h, w],
+                                                mode='bilinear',
+                                                align_corners=False)
+    disp_px = pred_disp * w + min_disp
+    pred_depth = (focal * baseline) / disp_px.clamp(min=1e-6)
+    return metric_depth(pred_depth,
+                        gt,
+                        median_scale=median_scale,
+                        min_depth=min_depth,
+                        max_depth=max_depth)
+
 def metric_synth(pred, gt):
     # PSNR
     m_rgb = torch.ones_like(pred)
@@ -278,6 +301,8 @@ class Metric(object):
         self.computer = []
         if ('depth_kitti' in metric_name
                 or 'depth_kitti_mono' in metric_name
+                or 'depth_vtd' in metric_name
+                or 'depth_vtd_mono' in metric_name
                 or 'depth_ddad' in metric_name
                 or 'depth_ddad_mono' in metric_name
                 or 'depth_cityscapes_mono' in metric_name
@@ -362,6 +387,28 @@ class Metric(object):
             pred = outputs[('depth', 's')]
             gt = inputs['depth']
             res += metric_depth(pred, gt, median_scale=True, kitti_mask=True)
+        if 'depth_vtd' in self.metric_name:
+            pred_disp = outputs[('disp', 's')]
+            gt = inputs['depth']
+            res += metric_depth_vtd(pred_disp,
+                                    gt,
+                                    median_scale=False,
+                                    focal=1634.5,
+                                    baseline=0.5,
+                                    min_disp=0.01,
+                                    min_depth=1e-3,
+                                    max_depth=100)
+        if 'depth_vtd_mono' in self.metric_name:
+            pred_disp = outputs[('disp', 's')]
+            gt = inputs['depth']
+            res += metric_depth_vtd(pred_disp,
+                                    gt,
+                                    median_scale=True,
+                                    focal=1634.5,
+                                    baseline=0.5,
+                                    min_disp=0.01,
+                                    min_depth=1e-3,
+                                    max_depth=100)
         if 'depth_kitti_stereo2015' in self.metric_name:
             if name is None:
                 pred = outputs[('depth', 's')]
